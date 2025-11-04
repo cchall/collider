@@ -66,16 +66,18 @@ class Beam:
         else:
             fig, ax = figure
 
-        outline_patch = plt.Rectangle((-self.Lx/2., -self.Ly/2.), self.Lx, self.Ly,
+        outline_patch = plt.Rectangle((self.Cx - self.Lx/2., self.Cy - self.Ly/2.), self.Lx, self.Ly,
                                       facecolor=None, edgecolor='black', alpha=0.2,
                                       rotation_point='center', angle=self.angle)
         ax.add_patch(outline_patch)
         for ele in self.elements:
-            x_center = self.Cx + ele.cx
-            y_center = self.Cy + ele.cy
+            x_center = ele.cx
+            y_center = ele.cy
 
             x_center_rot = x_center * np.cos(np.radians(self.angle)) - y_center * np.sin(np.radians(self.angle))
             y_center_rot = x_center * np.sin(np.radians(self.angle)) + y_center * np.cos(np.radians(self.angle))
+            x_center_rot += self.Cx
+            y_center_rot += self.Cy
 
             patch = plt.Rectangle((x_center_rot - self.dx/2., y_center_rot - self.dy/2.), ele.wx, ele.wy,
                                   rotation_point='center', angle=self.angle,

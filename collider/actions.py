@@ -20,19 +20,15 @@ def update_overlap(beam1: beam.Beam, beam2: beam.Beam) -> None:
     # If they are under the length of the smallest edges there must be overlap
     # If we fall between these two extremes a full check of all projections for overlap is required
     for e1 in beam1:
-        print(e1)
         for e2 in beam2:
             c2c_dist = math.sqrt((e1.cx - e2.cx)**2 + (e1.cy - e2.cy)**2)
             if c2c_dist > (largest_edge1 + largest_edge2):
-                print(111)
                 continue
             if c2c_dist < (smallest_edge1 + smallest_edge2):
-                print(222)
                 e1.interactions += 1
                 e2.interactions += 1
             else:
                 overlap = elements_overlap(e1, e2, beam1.angle, beam2.angle)
-                print(333)
                 if overlap:
                     e1.interactions += 1
                     e2.interactions += 1

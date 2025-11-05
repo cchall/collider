@@ -1,27 +1,32 @@
 import numpy as np
+from typing import Set, Tuple
 
 
 class Element:
-    __slots__ = ['center', 'width', 'interactions', '_hwx', '_hwy']
+    __slots__ = ['center', 'width', 'interactions', '_hwx', '_hwy', 'interacted_with']
 
-    def __init__(self, center: (float, float), width: (float, float), interactions: int = 0):
-        self.center = center
-        self.width = width
-        self.interactions = interactions
+    def __init__(self, center: Tuple[float, float], width: Tuple[float, float], interactions: int = 0):
+        self.center: Tuple[float, float] = center
+        self.width: Tuple[float, float] = width
+        self.interactions: int = interactions
+        self.interacted_with: Set[Element] = set()
 
         # half widths are used internally to cut down on operations
-        self._hwx = width[0]/2.
-        self._hwy = width[1]/2.
+        self._hwx: float = width[0]/2.
+        self._hwy: float = width[1]/2.
 
     @property
     def cx(self) -> float:
         return self.center[0]
+
     @property
     def cy(self) -> float:
         return self.center[1]
+
     @property
     def wx(self) -> float:
         return self.width[0]
+
     @property
     def wy(self) -> float:
         return self.width[1]
@@ -54,16 +59,15 @@ class GlobalElement(Element):
     interactions to its original 'local_view' element.
     """
 
-    def __init__(self, center: (float, float), width: (float, float), interactions: int, local_view: Element):
+    def __init__(self, center: Tuple[float, float], width: Tuple[float, float], interactions: int, local_view: Element):
         # 2. Store the local_view. It is now a required argument.
         #    We no longer need the 'if/else' block.
         if local_view is None:
             raise ValueError("GlobalElement must be initialized with a valid local_view Element.")
-        self._local_view = local_view
+        self._local_view: Element = local_view
 
         # 1. Initialize the super() class with *global* coordinates
         super().__init__(center, width, interactions)
-
 
     @property
     def interactions(self) -> int:
@@ -77,5 +81,5 @@ class GlobalElement(Element):
         self._local_view.interactions = new_value
 
     def __repr__(self) -> str:
-        # A clearer repr for the global view
-        return f"GlobalElement(global_centroid=({self.center}), width={self.width}, local_interactions={self.interactions})"
+        return (f"GlobalElement(global_centroid=({self.center}), width={self.width}, "
+                f"local_interactions={self.interactions})")

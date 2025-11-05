@@ -5,7 +5,7 @@ import math
 import numpy as np
 
 
-def update_overlap(beam1: beam.Beam, beam2: beam.Beam) -> None:
+def update_beam_overlap(beam1: beam.Beam, beam2: beam.Beam) -> None:
     """Count all overlapping elements between two beams. Updates interaction counters in place.
     (!) This function assumes all beam elements are the same width and height.
     """
@@ -28,14 +28,37 @@ def update_overlap(beam1: beam.Beam, beam2: beam.Beam) -> None:
                 e1.interactions += 1
                 e2.interactions += 1
             else:
-                overlap = elements_overlap(e1, e2, beam1.angle, beam2.angle)
+                overlap = overlap_shadows(e1, e2, beam1.angle, beam2.angle)
                 if overlap:
                     e1.interactions += 1
                     e2.interactions += 1
 
 
-def elements_overlap(element1: element.Element, element2: element.Element, angle1: float, angle2: float) -> bool:
-    """Returns True if the elements overlap, otherwise False"""
+def check_overlap(element1: element.Element, element2: element.Element, angle1: float, angle2: float) -> bool:
+    """Fast test of where cases elements are guaranteed to be overlapping or not.
+       Falls back to shadow test if fast test is inconclusive."""
+    # Find extrema of each beam - all elements are the same size so we can check this for only one element
+    largest_edge1 = max(element1.wx, element1.wy) / 2.
+    smallest_edge1 = min(element1.wx, element1.wy) / 2.
+    largest_edge2 = max(element2.wx, element2.wy) / 2.
+    smallest_edge2 = min(element2.wx, element2.wy) / 2.
+
+    # Perform a fast check if element centers are close enough to overlap
+    # If they are not then continue
+    # If they are under the length of the smallest edges there must be overlap
+    # If we fall between these two extremes a full check of all projections for overlap is required
+    c2c_dist = math.sqrt((element1.cx - element2.cx)**2 + (element1.cy - element2.cy)**2)
+    if c2c_dist > (largest_edge1 + largest_edge2):
+        return False
+    if c2c_dist < (smallest_edge1 + smallest_edge2):
+        return True
+    else:
+        overlap = overlap_shadows(element1, element2, angle1, angle2)
+        return overlap
+
+
+def overlap_shadows(element1: element.Element, element2: element.Element, angle1: float, angle2: float) -> bool:
+    """General overlap test, returns True if the elements overlap, otherwise False"""
     vertices1 = rotate_element_vertices(element1, angle1, centered=True)
     vertices2 = rotate_element_vertices(element2, angle2, centered=True)
 
@@ -80,7 +103,7 @@ if __name__ == "__main__":
     angle1 = 0
     angle2 = 30
 
-    overlap = elements_overlap(element1, element2, angle1=angle1, angle2=angle2)
+    overlap = overlap_shadows(element1, element2, angle1=angle1, angle2=angle2)
     plt.figure()
     for v in rotate_element_vertices(element1, angle1, centered=True):
         plt.scatter(*v, c='C1')

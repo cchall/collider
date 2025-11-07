@@ -5,7 +5,7 @@ import math
 import numpy as np
 
 
-def update_beam_overlap(beam1: beam.Beam, beam2: beam.Beam) -> None:
+def update_beam_overlap(beam1: beam.Beam, beam2: beam.Beam, fuzz: float = 1e-8) -> None:
     """Count all overlapping elements between two beams. Updates interaction counters in place.
     (!) This function assumes all beam elements are the same width and height.
     """
@@ -28,14 +28,15 @@ def update_beam_overlap(beam1: beam.Beam, beam2: beam.Beam) -> None:
             c2c_dist = math.sqrt((e1.cx - e2.cx)**2 + (e1.cy - e2.cy)**2)
             if c2c_dist > (largest_edge1 + largest_edge2):
                 continue
-            if c2c_dist < (smallest_edge1 + smallest_edge2):
+            # Floating point math can give false positives here. So add a small fuzz for cases where the edges overlap.
+            if c2c_dist + fuzz < (smallest_edge1 + smallest_edge2):
                 e1.interactions += 1
                 e2.interactions += 1
 
                 e1._local_view.interacted_with.add(e2._local_view)
                 e2._local_view.interacted_with.add(e1._local_view)
             else:
-                overlap = overlap_shadows(e1, e2, beam1.angle, beam2.angle)
+                overlap = overlap_shadows(e1, e2, beam1.angle, beam2.angle, fuzz)
                 if overlap:
                     e1.interactions += 1
                     e2.interactions += 1
@@ -91,7 +92,8 @@ def check_beam_proximity(beam1: beam.Beam, beam2: beam.Beam) -> bool:
     return True
 
 
-def overlap_shadows(element1: element.Element, element2: element.Element, angle1: float, angle2: float) -> bool:
+def overlap_shadows(element1: element.Element, element2: element.Element, angle1: float, angle2: float,
+                    fuzz: float = 1e-8) -> bool:
     """General overlap test, returns True if the elements overlap, otherwise False"""
     vertices1 = rotate_element_vertices(element1, angle1, centered=True)
     vertices2 = rotate_element_vertices(element2, angle2, centered=True)
@@ -122,7 +124,8 @@ def overlap_shadows(element1: element.Element, element2: element.Element, angle1
         # If cond1 is true ele1 is fully to the right of ele2 or if cond2 then it is fully to the left.
         # If a vertex is shared this is not considered to be an overlap - so we use le/ge
         # Otherwise, the two elements overlap on this projection.
-        if min(ele1_proj) >= max(ele2_proj) or max(ele1_proj) <= min(ele2_proj):
+        # Floating point math can give false positives here. So add a small fuzz for cases where the vertices overlap.
+        if (min(ele1_proj) + fuzz) >= max(ele2_proj) or (max(ele1_proj) - fuzz) <= min(ele2_proj):
             return False
 
     # The element shadows overlap on all projections so their areas must overlap

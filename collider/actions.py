@@ -9,6 +9,7 @@ def update_beam_overlap(beam1: beam.Beam, beam2: beam.Beam) -> None:
     """Count all overlapping elements between two beams. Updates interaction counters in place.
     (!) This function assumes all beam elements are the same width and height.
     """
+    # TODO: Need to account for rotation here
     # Find extrema of each beam - all elements are the same size so we can check this for only one element
     largest_edge1 = max(beam1._elements[0].wx, beam1._elements[0].wy) / 2.
     smallest_edge1 = min(beam1._elements[0].wx, beam1._elements[0].wy) / 2.
@@ -21,17 +22,26 @@ def update_beam_overlap(beam1: beam.Beam, beam2: beam.Beam) -> None:
     # If we fall between these two extremes a full check of all projections for overlap is required
     for e1 in beam1:
         for e2 in beam2:
+            if e2._local_view in e1._local_view.interacted_with:
+                continue
+
             c2c_dist = math.sqrt((e1.cx - e2.cx)**2 + (e1.cy - e2.cy)**2)
             if c2c_dist > (largest_edge1 + largest_edge2):
                 continue
             if c2c_dist < (smallest_edge1 + smallest_edge2):
                 e1.interactions += 1
                 e2.interactions += 1
+
+                e1._local_view.interacted_with.add(e2._local_view)
+                e2._local_view.interacted_with.add(e1._local_view)
             else:
                 overlap = overlap_shadows(e1, e2, beam1.angle, beam2.angle)
                 if overlap:
                     e1.interactions += 1
                     e2.interactions += 1
+
+                    e1._local_view.interacted_with.add(e2._local_view)
+                    e2._local_view.interacted_with.add(e1._local_view)
 
 
 def check_overlap(element1: element.Element, element2: element.Element, angle1: float, angle2: float) -> bool:
@@ -55,6 +65,30 @@ def check_overlap(element1: element.Element, element2: element.Element, angle1: 
     else:
         overlap = overlap_shadows(element1, element2, angle1, angle2)
         return overlap
+
+
+def check_beam_proximity(beam1: beam.Beam, beam2: beam.Beam) -> bool:
+    """Returns False if no possibility of beams overlapping, otherwise True."""
+    c2c_dist = math.sqrt((beam1.Cx - beam2.Cx) ** 2 + (beam1.Cy - beam2.Cy) ** 2)
+
+    # Calculate the AABB of the rotated beam 1
+    c1 = abs(math.cos(math.radians(beam1.angle)))
+    s1 = abs(math.sin(math.radians(beam1.angle)))
+    beam1_width_aabb = beam1.Lx * c1 + beam1.Ly * s1
+    beam1_height_aabb = beam1.Lx * s1 + beam1.Ly * c1
+    # Calculate the AABB of the rotated beam 2
+    c2 = abs(math.cos(math.radians(beam2.angle)))
+    s2 = abs(math.sin(math.radians(beam2.angle)))
+    beam2_width_aabb = beam2.Lx * c2 + beam2.Ly * s2
+    beam2_height_aabb = beam2.Lx * s2 + beam2.Ly * c2
+
+    m1 = max(beam1_width_aabb, beam1_height_aabb) / 2.
+    m2 = max(beam2_width_aabb, beam2_height_aabb) / 2.
+
+    if c2c_dist > (m1 + m2):
+        return False
+
+    return True
 
 
 def overlap_shadows(element1: element.Element, element2: element.Element, angle1: float, angle2: float) -> bool:

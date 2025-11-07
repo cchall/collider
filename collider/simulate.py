@@ -26,6 +26,15 @@ def simulation_step(beams: List[Beam], time_step: float, save_directory: pathlib
     return any_proximal
 
 
+def run_simulation(beam1, beam2, time_step: float, save_directory: pathlib.Path = None) -> None:
+    _, _, t_c = set_initial_state(beam1, beam2)
+    n_steps = int(2*t_c // time_step) + 1
+
+    for _ in range(n_steps):
+        proximal = simulation_step(beams=[beam1, beam2], time_step=time_step, save_directory=save_directory)
+
+    return
+
 
 def set_initial_state(beam1: SetupInfo, beam2: SetupInfo) -> Tuple[Tuple[float, float], Tuple[float, float], float]:
     """

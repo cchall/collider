@@ -1,9 +1,40 @@
+import dataclasses
 import json
+import math
+import pathlib
 from collider.geometry import rotation_matrix
 from typing import Iterator, List, Optional
 from collider import element
 import numpy as np
 import matplotlib.pyplot as plt
+
+
+@dataclasses.dataclass
+class BeamInfo:
+    Lx: float
+    Ly: float
+    dx: float
+    dy: float
+    Cx: float
+    Cy: float
+    vx: float
+    vy: float
+
+    @property
+    def angle(self) -> float:
+        return math.degrees(math.atan2(self.vy, self.vx))
+
+
+@dataclasses.dataclass
+class SetupInfo:
+    Lx: float
+    Ly: float
+    vx: float
+    vy: float
+
+    @property
+    def angle(self) -> float:
+        return math.degrees(math.atan2(self.vy, self.vx))
 
 
 class Beam:
@@ -16,11 +47,12 @@ class Beam:
     """
 
     def __init__(self, Lx: float, Ly: float, dx: float, dy: float, Cx: float, Cy: float, angle: float,
-                 vx: float = 0.0, vy: float = 0.0):
+                 vx: float = 0.0, vy: float = 0.0, name: str = 'Beam') -> None:
         self.Lx = Lx
         self.Ly = Ly
         self.dx = dx
         self.dy = dy
+        self.name = name
 
         self._Cx = Cx
         self._Cy = Cy
@@ -90,7 +122,7 @@ class Beam:
         element = self._elements[index]
         v1 = element.cx
 
-    def serialize(self, name):
+    def serialize(self, filename: str or pathlib.Path) -> None:
         state = {
             'Lx': self.Lx,
             'Ly': self.Ly,
@@ -102,7 +134,7 @@ class Beam:
             'interactions': [e.interactions for e in self._elements],
         }
 
-        json.dump(state, open(f'{name}.json', 'w'))
+        json.dump(state, open(f'{filename}.json', 'w'))
 
     def update_center_position(self, dx, dy):
         self.Cx += dx
@@ -178,7 +210,7 @@ class Beam:
         return f"Beam(centroid=({self.Cx},{self.Cy}), angle={self.angle}, elements={len(self)})"
 
 
-def plot_beam(beam, figure: List = None):
+def plot_beam(beam, figure: List = None, bounds=None):
     if figure is None:
         fig, ax = plt.subplots(1, 1)
     else:
@@ -187,7 +219,7 @@ def plot_beam(beam, figure: List = None):
     outline_patch = plt.Rectangle((beam.Cx - beam.Lx / 2., beam.Cy - beam.Ly / 2.), beam.Lx, beam.Ly,
                                   facecolor='none', edgecolor='black', alpha=0.2,  # 'none' is standard for no fill
                                   rotation_point='center', angle=beam.angle)
-    ax.add_patch(outline_patch)
+    # ax.add_patch(outline_patch)
 
     # --- Start of Modifications ---
 
@@ -232,15 +264,19 @@ def plot_beam(beam, figure: List = None):
         patch = plt.Rectangle((ele.cx - beam.dx / 2., ele.cy - beam.dy / 2.), ele.wx, ele.wy,
                               rotation_point='center', angle=beam.angle,
                               facecolor=color, edgecolor='black',
-                              alpha=0.2)  # Your original alpha is preserved
+                              alpha=0.42)  # Your original alpha is preserved
         ax.add_patch(patch)
 
     # 5. Add the colorbar to the figure
     cbar = fig.colorbar(mappable, ax=ax, orientation='vertical')
     cbar.set_label('Interactions')  # Set a label for the colorbar
 
-    ax.set_xlim(-(beam.Cx + beam.Lx) * 2, (beam.Cx + beam.Lx) * 2)
-    ax.set_ylim(-(beam.Cy + beam.Ly) * 2, (beam.Cy + beam.Ly) * 2)
+    if bounds:
+        ax.set_xlim(*bounds[0])
+        ax.set_ylim(*bounds[1])
+    else:
+        ax.set_xlim(-(beam.Cx + beam.Lx) * 2, (beam.Cx + beam.Lx) * 2)
+        ax.set_ylim(-(beam.Cy + beam.Ly) * 2, (beam.Cy + beam.Ly) * 2)
     ax.set_aspect('equal')
     plt.savefig('beam.png')
 

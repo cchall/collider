@@ -41,7 +41,7 @@ class Beam:
     """
     Maintains a list of elements.
     Elements just know their center, in the local coordinates of the beam
-    Beam maintains a global coordinate.
+    maintains a global coordinate.
     Access to the global coordinate of an element should be through the Beam
 
     """
@@ -118,10 +118,6 @@ class Beam:
             for cy in np.linspace(-(self.Ly - self.dy) / 2, (self.Ly - self.dy) / 2, self.Ny):
                 self._elements.append(element.Element(center=(cx, cy), width=(self.dx, self.dy)))
 
-    def get_element_global(self, index: int):
-        element = self._elements[index]
-        v1 = element.cx
-
     def serialize(self, filename: str or pathlib.Path) -> None:
         state = {
             'Lx': self.Lx,
@@ -136,26 +132,13 @@ class Beam:
 
         json.dump(state, open(f'{filename}.json', 'w'))
 
-    def update_center_position(self, dx, dy):
-        self.Cx += dx
-        self.Cy += dy
-
     def _regenerate_cache(self):
         """
         Recalculates all global element views and fills the cache.
         This is the "expensive" operation that we now only run when needed.
         """
-        # print("DEBUG: Regenerating cache...") # Uncomment for testing
-
         # Pre-calculate trig *once* for the entire batch
         matrix = rotation_matrix(self._angle)
-
-        # angle_rad = math.radians(self._angle)
-        # cos_a = math.cos(angle_rad)
-        # sin_a = math.sin(angle_rad)
-        #
-        # beam_cx = self._centroid.x
-        # beam_cy = self._centroid.y
 
         new_cache = []
         for ele in self._elements:
@@ -210,7 +193,7 @@ class Beam:
         return f"Beam(centroid=({self.Cx},{self.Cy}), angle={self.angle}, elements={len(self)})"
 
 
-def plot_beam(beam, figure: List = None, bounds=None):
+def plot_beam(beam, figure: List = None, bounds=None, filename: str = None):
     if figure is None:
         fig, ax = plt.subplots(1, 1)
     else:
@@ -220,8 +203,6 @@ def plot_beam(beam, figure: List = None, bounds=None):
                                   facecolor='none', edgecolor='black', alpha=0.2,  # 'none' is standard for no fill
                                   rotation_point='center', angle=beam.angle)
     # ax.add_patch(outline_patch)
-
-    # --- Start of Modifications ---
 
     # 1. Check if there are elements to plot
     if not beam._elements:
@@ -246,18 +227,7 @@ def plot_beam(beam, figure: List = None, bounds=None):
     # 4. Create a ScalarMappable to handle color mapping and for the colorbar
     mappable = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
 
-    # --- End of Modifications ---
-
     for ele in beam:
-        # x_center = ele.cx
-        # y_center = ele.cy
-        #
-        # x_center_rot = x_center * np.cos(np.radians(beam.angle)) - y_center * np.sin(np.radians(beam.angle))
-        # y_center_rot = x_center * np.sin(np.radians(beam.angle)) + y_center * np.cos(np.radians(beam.angle))
-        # x_center_rot += beam.Cx
-        # y_center_rot += beam.Cy
-
-        # --- Modified facecolor ---
         # Get the RGBA color for this element's interaction value
         color = mappable.to_rgba(ele.interactions)
 
@@ -278,6 +248,8 @@ def plot_beam(beam, figure: List = None, bounds=None):
         ax.set_xlim(-(beam.Cx + beam.Lx) * 2, (beam.Cx + beam.Lx) * 2)
         ax.set_ylim(-(beam.Cy + beam.Ly) * 2, (beam.Cy + beam.Ly) * 2)
     ax.set_aspect('equal')
-    plt.savefig('beam.png')
+
+    if filename:
+        plt.savefig(filename, dpi=600)
 
     return fig, ax

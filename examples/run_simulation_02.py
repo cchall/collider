@@ -29,6 +29,6 @@ run_simulation(beam1, beam2, time_step=t_c / 100., save_directory=None)
 # # beam2.update_position(dt=t_c)
 
 figure = plot_beam(beam1)
-plot_beam(beam2, figure, bounds=((-10, 10), (-10, 10)))
+plot_beam(beam2, figure, bounds=((-10, 10), (-10, 10)), filename='beam.png')
 for ele in beam1:
     print(ele.interactions)

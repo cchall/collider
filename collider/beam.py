@@ -2,11 +2,14 @@ import dataclasses
 import json
 import math
 import pathlib
-from collider.geometry import rotation_matrix
-from typing import Iterator, List, Optional
-from collider import element
+from typing import Iterator, List, Optional, Union, Tuple
+
 import numpy as np
 import matplotlib.pyplot as plt
+
+from collider import element
+from collider.geometry import rotation_matrix
+
 
 
 @dataclasses.dataclass
@@ -166,11 +169,11 @@ class Beam:
 
         self._invalidate_cache()  # Invalidate after creation
 
-    def serialize(self, filename: str or pathlib.Path) -> None:
+    def serialize(self, filename: Union[str, pathlib.Path]) -> None:
+        """Saves the current beam state to a JSON file."""
         state = {
             'Lx': self.Lx,
             'Ly': self.Ly,
-            # Serialize the current PHYSICAL dx/dy
             'dx': self.dx,
             'dy': self.dy,
             'Cx': self.Cx,
@@ -178,42 +181,50 @@ class Beam:
             'angle': self.angle,
             'interactions': [e.interactions for e in self._elements],
         }
+        # Ensure filename has .json extension
+        path = pathlib.Path(filename)
+        if path.suffix != '.json':
+            path = path.with_suffix('.json')
 
-        json.dump(state, open(f'{filename}.json', 'w'))
+        with open(path, 'w') as f:
+            json.dump(state, f, indent=2)
 
-    def _regenerate_cache(self):
+    def _regenerate_cache(self) -> None:
         """
         Recalculates all global element views.
-        This now performs scaling, rotation, and translation all at once.
+        Performs vectorized scaling, rotation, and translation.
         """
+        if not self._elements:
+            self._cached_global_elements = []
+            return
+
+        # 1. Gather all fractional local coordinates into a (N, 2) array
+        # Note: If performance is critical, consider maintaining _frac_coords
+        # as a persistent numpy array alongside _elements.
+        frac_coords = np.array([[e.cx, e.cy] for e in self._elements])
+
+        # 2. Scale: fractional -> physical local dimensions
+        local_physical_coords = frac_coords * np.array([self.Lx, self.Ly])
+
+        # 3. Rotate
+        # Transpose the rotation matrix to allow right-multiplication by row vectors: (M @ v).T == v @ M.T
         matrix = rotation_matrix(self._angle)
-        beam_center_trans = np.array([self.Cx, self.Cy])
+        rotated_coords = local_physical_coords @ matrix.T
 
-        # Get current physical scales and element sizes
-        current_Lx = self.Lx
-        current_Ly = self.Ly
-        physical_width = (self.dx, self.dy)
+        # 4. Translate: Add global beam centroid
+        global_coords = rotated_coords + np.array([self.Cx, self.Cy])
 
-        new_cache = []
-        for ele in self._elements:
-            # ele.cx and ele.cy are fractional (e.g., -0.5 to 0.5)
-
-            # 1. Scale: Convert fractional local coords to physical local coords
-            physical_local_cx = ele.cx * current_Lx
-            physical_local_cy = ele.cy * current_Ly
-
-            # 2. Rotate: Rotate physical local coords
-            rotated_xy = np.dot(matrix, [physical_local_cx, physical_local_cy])
-
-            # 3. Translate: Add global beam center
-            global_xy = rotated_xy + beam_center_trans
-
-            new_cache.append(
-                element.GlobalElement(center=global_xy, width=physical_width,
-                                      interactions=ele.interactions, local_view=ele)
+        # 5. Rebuild the cache list
+        current_physical_width = (self.dx, self.dy)
+        self._cached_global_elements = [
+            element.GlobalElement(
+                center=tuple(gc),
+                width=current_physical_width,
+                interactions=ele.interactions,
+                local_view=ele
             )
-
-        self._cached_global_elements = new_cache
+            for gc, ele in zip(global_coords, self._elements)
+        ]
 
     def _get_valid_cache(self) -> List[element.GlobalElement]:
         """

@@ -42,17 +42,19 @@ class SetupInfo:
 
 class Beam:
     """
-    Maintains a list of elements.
+    Maintains a list of elements representing a beam.
+
     Elements store their centers fractionally (from -0.5 to 0.5) in the
-    local coordinates of the beam.
-    Resizing (Lx, Ly) is handled dynamically during cache generation.
+    local coordinates of the beam. Resizing (Lx, Ly), translating (Cx, Cy),
+    and rotating are handled dynamically via a cached view of global elements.
     """
 
-    def __init__(self, Lx: float, Ly: float, dx: float, dy: float, Cx: float, Cy: float, angle: float,
+    def __init__(self, Lx: float, Ly: float, dx: float, dy: float,
+                 Cx: float, Cy: float, angle: float,
                  vx: float = 0.0, vy: float = 0.0, name: str = 'Beam') -> None:
+        self.name = name
         self._Lx = Lx
         self._Ly = Ly
-        self.name = name
 
         self._Cx = Cx
         self._Cy = Cy
@@ -60,7 +62,7 @@ class Beam:
         self.vy = vy
         self._angle = angle
 
-        # Nx and Ny are fixed at init to define the grid topology
+        # Nx and Ny are fixed at init to define the immutable grid topology
         self.Nx = int(Lx / dx)
         self.Ny = int(Ly / dy)
 
@@ -69,19 +71,18 @@ class Beam:
         # The cache. It is 'None' when dirty/invalid.
         self._cached_global_elements: Optional[List[element.GlobalElement]] = None
 
-    def _invalidate_cache(self):
-        """Marks the cache as dirty. This is the key to the solution."""
+    def _invalidate_cache(self) -> None:
+        """Marks the global element cache as dirty."""
         self._cached_global_elements = None
 
-    # --- Properties for all global transformations ---
+    # --- Properties for physical dimensions ---
 
     @property
     def Lx(self) -> float:
         return self._Lx
 
     @Lx.setter
-    def Lx(self, new_Lx: float):
-        """Set the Beam's physical length and invalidate the cache."""
+    def Lx(self, new_Lx: float) -> None:
         if self._Lx != new_Lx:
             self._Lx = new_Lx
             self._invalidate_cache()
@@ -91,30 +92,29 @@ class Beam:
         return self._Ly
 
     @Ly.setter
-    def Ly(self, new_Ly: float):
-        """Set the Beam's physical width and invalidate the cache."""
+    def Ly(self, new_Ly: float) -> None:
         if self._Ly != new_Ly:
             self._Ly = new_Ly
             self._invalidate_cache()
 
-    # --- Read-only properties for physical dx/dy ---
-
     @property
     def dx(self) -> float:
-        """Get the current physical width of one element."""
+        """Current physical width of one element."""
         return self._Lx / self.Nx
 
     @property
     def dy(self) -> float:
-        """Get the current physical height of one element."""
+        """Current physical height of one element."""
         return self._Ly / self.Ny
+
+    # --- Properties for position and orientation ---
 
     @property
     def Cx(self) -> float:
         return self._Cx
 
     @Cx.setter
-    def Cx(self, new_Cx: float):
+    def Cx(self, new_Cx: float) -> None:
         if self._Cx != new_Cx:
             self._Cx = new_Cx
             self._invalidate_cache()
@@ -124,7 +124,7 @@ class Beam:
         return self._Cy
 
     @Cy.setter
-    def Cy(self, new_Cy: float):
+    def Cy(self, new_Cy: float) -> None:
         if self._Cy != new_Cy:
             self._Cy = new_Cy
             self._invalidate_cache()
@@ -134,40 +134,42 @@ class Beam:
         return self._angle
 
     @angle.setter
-    def angle(self, new_angle: float):
+    def angle(self, new_angle: float) -> None:
         if self._angle != new_angle:
             self._angle = new_angle
             self._invalidate_cache()
 
-    def update_position(self, dt):
-        # Setters will handle cache invalidation
+    # --- Methods ---
+
+    def update_position(self, dt: float) -> None:
+        """Updates the beam centroid based on its velocity vector."""
+        # Setters automatically handle cache invalidation
         self.Cx += self.vx * dt
         self.Cy += self.vy * dt
 
-    def create_elements(self):
+    def create_elements(self) -> None:
         """
-        Populates the _elements list with a FRACTIONAL grid.
-        Centers range from -0.5 to 0.5.
-        This method is only called once.
+        Populates the internal _elements list with a fractional grid.
+        Centers range from -0.5 to 0.5. This is typically called once at startup.
         """
-
-        # Calculate fractional dimensions
         frac_dx = 1.0 / self.Nx
         frac_dy = 1.0 / self.Ny
         frac_width = (frac_dx, frac_dy)
 
-        # Create linspace for fractional centers
-        # This is equivalent to np.linspace(-(Lx - dx) / 2, (Lx - dx) / 2, Nx) / Lx
-        # Which simplifies to np.linspace(-(1 - frac_dx) / 2, (1 - frac_dx) / 2, Nx)
-        cx_coords = np.linspace(-(1.0 - frac_dx) / 2.0, (1.0 - frac_dx) / 2.0, self.Nx)
-        cy_coords = np.linspace(-(1.0 - frac_dy) / 2.0, (1.0 - frac_dy) / 2.0, self.Ny)
+        # Create linspace for fractional centers.
+        # Equivalent to np.linspace(-(1.0 - frac_dx) / 2.0, ...)
+        cx_coords = np.linspace(-0.5 + frac_dx / 2.0, 0.5 - frac_dx / 2.0, self.Nx)
+        cy_coords = np.linspace(-0.5 + frac_dy / 2.0, 0.5 - frac_dy / 2.0, self.Ny)
 
-        self._elements = []
-        for cx in cx_coords:
-            for cy in cy_coords:
-                self._elements.append(element.Element(center=(cx, cy), width=frac_width))
+        # Use meshgrid to generate all coordinate pairs efficiently
+        grid_x, grid_y = np.meshgrid(cx_coords, cy_coords, indexing='ij')
 
-        self._invalidate_cache()  # Invalidate after creation
+        self._elements = [
+            element.Element(center=(cx, cy), width=frac_width)
+            for cx, cy in zip(grid_x.flat, grid_y.flat)
+        ]
+
+        self._invalidate_cache()
 
     def serialize(self, filename: Union[str, pathlib.Path]) -> None:
         """Saves the current beam state to a JSON file."""

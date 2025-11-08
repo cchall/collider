@@ -40,18 +40,15 @@ class SetupInfo:
 class Beam:
     """
     Maintains a list of elements.
-    Elements just know their center, in the local coordinates of the beam
-    maintains a global coordinate.
-    Access to the global coordinate of an element should be through the Beam
-
+    Elements store their centers fractionally (from -0.5 to 0.5) in the
+    local coordinates of the beam.
+    Resizing (Lx, Ly) is handled dynamically during cache generation.
     """
 
     def __init__(self, Lx: float, Ly: float, dx: float, dy: float, Cx: float, Cy: float, angle: float,
                  vx: float = 0.0, vy: float = 0.0, name: str = 'Beam') -> None:
-        self.Lx = Lx
-        self.Ly = Ly
-        self.dx = dx
-        self.dy = dy
+        self._Lx = Lx
+        self._Ly = Ly
         self.name = name
 
         self._Cx = Cx
@@ -60,6 +57,7 @@ class Beam:
         self.vy = vy
         self._angle = angle
 
+        # Nx and Ny are fixed at init to define the grid topology
         self.Nx = int(Lx / dx)
         self.Ny = int(Ly / dy)
 
@@ -72,56 +70,107 @@ class Beam:
         """Marks the cache as dirty. This is the key to the solution."""
         self._cached_global_elements = None
 
+    # --- Properties for all global transformations ---
+
+    @property
+    def Lx(self) -> float:
+        return self._Lx
+
+    @Lx.setter
+    def Lx(self, new_Lx: float):
+        """Set the Beam's physical length and invalidate the cache."""
+        if self._Lx != new_Lx:
+            self._Lx = new_Lx
+            self._invalidate_cache()
+
+    @property
+    def Ly(self) -> float:
+        return self._Ly
+
+    @Ly.setter
+    def Ly(self, new_Ly: float):
+        """Set the Beam's physical width and invalidate the cache."""
+        if self._Ly != new_Ly:
+            self._Ly = new_Ly
+            self._invalidate_cache()
+
+    # --- Read-only properties for physical dx/dy ---
+
+    @property
+    def dx(self) -> float:
+        """Get the current physical width of one element."""
+        return self._Lx / self.Nx
+
+    @property
+    def dy(self) -> float:
+        """Get the current physical height of one element."""
+        return self._Ly / self.Ny
+
     @property
     def Cx(self) -> float:
-        """Get the Beam's global centroid."""
         return self._Cx
 
     @Cx.setter
     def Cx(self, new_Cx: float):
-        """Set the Beam's global centroid and invalidate the cache."""
         if self._Cx != new_Cx:
             self._Cx = new_Cx
             self._invalidate_cache()
 
     @property
     def Cy(self) -> float:
-        """Get the Beam's global centroid."""
         return self._Cy
 
     @Cy.setter
     def Cy(self, new_Cy: float):
-        """Set the Beam's global centroid and invalidate the cache."""
         if self._Cy != new_Cy:
             self._Cy = new_Cy
             self._invalidate_cache()
 
     @property
     def angle(self) -> float:
-        """Get the Beam's global angle in degrees."""
         return self._angle
 
     @angle.setter
     def angle(self, new_angle: float):
-        """Set the Beam's global angle and invalidate the cache."""
         if self._angle != new_angle:
             self._angle = new_angle
             self._invalidate_cache()
 
     def update_position(self, dt):
+        # Setters will handle cache invalidation
         self.Cx += self.vx * dt
         self.Cy += self.vy * dt
 
     def create_elements(self):
-        # Elements are in the local coordinate system. They don't know about the Beam center or angle.
-        for cx in np.linspace(-(self.Lx - self.dx) / 2, (self.Lx - self.dx) / 2, self.Nx):
-            for cy in np.linspace(-(self.Ly - self.dy) / 2, (self.Ly - self.dy) / 2, self.Ny):
-                self._elements.append(element.Element(center=(cx, cy), width=(self.dx, self.dy)))
+        """
+        Populates the _elements list with a FRACTIONAL grid.
+        Centers range from -0.5 to 0.5.
+        This method is only called once.
+        """
+
+        # Calculate fractional dimensions
+        frac_dx = 1.0 / self.Nx
+        frac_dy = 1.0 / self.Ny
+        frac_width = (frac_dx, frac_dy)
+
+        # Create linspace for fractional centers
+        # This is equivalent to np.linspace(-(Lx - dx) / 2, (Lx - dx) / 2, Nx) / Lx
+        # Which simplifies to np.linspace(-(1 - frac_dx) / 2, (1 - frac_dx) / 2, Nx)
+        cx_coords = np.linspace(-(1.0 - frac_dx) / 2.0, (1.0 - frac_dx) / 2.0, self.Nx)
+        cy_coords = np.linspace(-(1.0 - frac_dy) / 2.0, (1.0 - frac_dy) / 2.0, self.Ny)
+
+        self._elements = []
+        for cx in cx_coords:
+            for cy in cy_coords:
+                self._elements.append(element.Element(center=(cx, cy), width=frac_width))
+
+        self._invalidate_cache()  # Invalidate after creation
 
     def serialize(self, filename: str or pathlib.Path) -> None:
         state = {
             'Lx': self.Lx,
             'Ly': self.Ly,
+            # Serialize the current PHYSICAL dx/dy
             'dx': self.dx,
             'dy': self.dy,
             'Cx': self.Cx,
@@ -134,22 +183,33 @@ class Beam:
 
     def _regenerate_cache(self):
         """
-        Recalculates all global element views and fills the cache.
-        This is the "expensive" operation that we now only run when needed.
+        Recalculates all global element views.
+        This now performs scaling, rotation, and translation all at once.
         """
-        # Pre-calculate trig *once* for the entire batch
         matrix = rotation_matrix(self._angle)
+        beam_center_trans = np.array([self.Cx, self.Cy])
+
+        # Get current physical scales and element sizes
+        current_Lx = self.Lx
+        current_Ly = self.Ly
+        physical_width = (self.dx, self.dy)
 
         new_cache = []
         for ele in self._elements:
-            # Perform rotation in local frame
-            rotated_xy = np.dot(matrix, [ele.cx, ele.cy])
+            # ele.cx and ele.cy are fractional (e.g., -0.5 to 0.5)
 
-            # Perform translation
-            rotated_xy += np.array([self.Cx, self.Cy])
+            # 1. Scale: Convert fractional local coords to physical local coords
+            physical_local_cx = ele.cx * current_Lx
+            physical_local_cy = ele.cy * current_Ly
+
+            # 2. Rotate: Rotate physical local coords
+            rotated_xy = np.dot(matrix, [physical_local_cx, physical_local_cy])
+
+            # 3. Translate: Add global beam center
+            global_xy = rotated_xy + beam_center_trans
 
             new_cache.append(
-                element.GlobalElement(center=rotated_xy, width=ele.width,
+                element.GlobalElement(center=global_xy, width=physical_width,
                                       interactions=ele.interactions, local_view=ele)
             )
 
@@ -161,36 +221,24 @@ class Beam:
         regenerating it *only* if it's currently invalid (None).
         """
         if self._cached_global_elements is None:
-            # Cache is dirty, so we rebuild it
             self._regenerate_cache()
 
-        # Now, the cache is guaranteed to be a valid list
         return self._cached_global_elements  # type: ignore
 
     # --- Container Protocol (Now reads from the cache) ---
 
     def __len__(self) -> int:
-        """Returns the number of elements in the beam."""
         return len(self._elements)
 
     def __getitem__(self, index) -> element.GlobalElement:
-        """
-        Gets an element by index, reading from the cache.
-        Regenerates cache first if it's dirty.
-        """
-        valid_cache = self._get_valid_cache()
-        return valid_cache[index]
+        return self._get_valid_cache()[index]
 
     def __iter__(self) -> Iterator[element.GlobalElement]:
-        """
-        Iterates over the elements, reading from the cache.
-        Regenerates cache first if it's dirty.
-        """
-        valid_cache = self._get_valid_cache()
-        yield from valid_cache
+        yield from self._get_valid_cache()
 
     def __repr__(self) -> str:
-        return f"Beam(centroid=({self.Cx},{self.Cy}), angle={self.angle}, elements={len(self)})"
+        return (f"Beam(centroid=({self.Cx:.2f},{self.Cy:.2f}), angle={self.angle:.1f}, "
+                f"Size=({self.Lx:.2f}x{self.Ly:.2f}), elements={len(self)})")
 
 
 def plot_beam(beam, figure: List = None, bounds=None, filename: str = None):

@@ -201,8 +201,6 @@ class Beam:
             return
 
         # 1. Gather all fractional local coordinates into a (N, 2) array
-        # Note: If performance is critical, consider maintaining _frac_coords
-        # as a persistent numpy array alongside _elements.
         frac_coords = np.array([[e.cx, e.cy] for e in self._elements])
 
         # 2. Scale: fractional -> physical local dimensions

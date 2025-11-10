@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 from collider import element
 from collider.geometry import rotation_matrix
-
+from collider.profiles import Profile
 
 
 @dataclasses.dataclass
@@ -51,7 +51,8 @@ class Beam:
 
     def __init__(self, Lx: float, Ly: float, dx: float, dy: float,
                  Cx: float, Cy: float, angle: float,
-                 vx: float = 0.0, vy: float = 0.0, name: str = 'Beam') -> None:
+                 vx: float = 0.0, vy: float = 0.0,
+                 profile: Profile = None, name: str = 'Beam') -> None:
         self.name = name
         self._Lx = Lx
         self._Ly = Ly
@@ -61,6 +62,7 @@ class Beam:
         self.vx = vx
         self.vy = vy
         self._angle = angle
+        self.profile = profile
 
         # Nx and Ny are fixed at init to define the immutable grid topology
         self.Nx = int(Lx / dx)
@@ -74,6 +76,19 @@ class Beam:
     def _invalidate_cache(self) -> None:
         """Marks the global element cache as dirty."""
         self._cached_global_elements = None
+
+    def update_from_profile(self, time: float) -> None:
+        # Get intensity by element center and bounds
+        intensity, lx, ly = self.profile.sample_intensity(self.Nx, self.Ny, time)
+
+        # lx and ly are bounds out to the centers of the outermost elements
+        # so we need to add half an element length to get the full Beam bounds
+        self.Lx = lx + self.dx / 2.
+        self.Ly = ly + self.dy / 2.
+
+        for ii, elem in zip(intensity.ravel(), self._elements):
+            elem.density = ii
+
 
     # --- Properties for physical dimensions ---
 
@@ -220,6 +235,7 @@ class Beam:
             element.GlobalElement(
                 center=tuple(gc),
                 width=current_physical_width,
+                density=ele.density,
                 interactions=ele.interactions,
                 local_view=ele
             )
@@ -252,7 +268,8 @@ class Beam:
                 f"Size=({self.Lx:.2f}x{self.Ly:.2f}), elements={len(self)})")
 
 
-def plot_beam(beam, figure: List = None, bounds=None, filename: str = None):
+def plot_beam(beam, figure: List = None, bounds=None,
+              filename: str = None, show: bool = True, color_by: str ='interactions'):
     if figure is None:
         fig, ax = plt.subplots(1, 1)
     else:
@@ -272,7 +289,7 @@ def plot_beam(beam, figure: List = None, bounds=None, filename: str = None):
         return fig, ax
 
     # 2. Get the data range for the color scale
-    interactions = [ele.interactions for ele in beam._elements]
+    interactions = [getattr(ele, color_by) for ele in beam._elements]
     min_val = min(interactions)
     max_val = max(interactions)
 
@@ -288,7 +305,7 @@ def plot_beam(beam, figure: List = None, bounds=None, filename: str = None):
 
     for ele in beam:
         # Get the RGBA color for this element's interaction value
-        color = mappable.to_rgba(ele.interactions)
+        color = mappable.to_rgba(getattr(ele, color_by))
 
         patch = plt.Rectangle((ele.cx - beam.dx / 2., ele.cy - beam.dy / 2.), ele.wx, ele.wy,
                               rotation_point='center', angle=beam.angle,
@@ -310,5 +327,6 @@ def plot_beam(beam, figure: List = None, bounds=None, filename: str = None):
 
     if filename:
         plt.savefig(filename, dpi=600)
+    if show: plt.show()
 
     return fig, ax

@@ -3,12 +3,14 @@ from typing import Set, Tuple
 
 
 class Element:
-    __slots__ = ['center', 'width', 'interactions', '_hwx', '_hwy', 'interacted_with']
+    __slots__ = ['center', 'width', 'interactions', '_hwx', '_hwy', 'density', 'interacted_with']
 
-    def __init__(self, center: Tuple[float, float], width: Tuple[float, float], interactions: int = 0):
+    def __init__(self, center: Tuple[float, float], width: Tuple[float, float],
+                 density: float = 0, interactions: int = 0):
         self.center: Tuple[float, float] = center
         self.width: Tuple[float, float] = width
         self.interactions: int = interactions
+        self.density: float = density
         self.interacted_with: Set[Element] = set()
 
         # half widths are used internally to cut down on operations
@@ -59,7 +61,7 @@ class GlobalElement(Element):
     interactions to its original 'local_view' element.
     """
 
-    def __init__(self, center: Tuple[float, float], width: Tuple[float, float], interactions: int, local_view: Element):
+    def __init__(self, center: Tuple[float, float], width: Tuple[float, float], density: float, interactions: int, local_view: Element):
         # 2. Store the local_view. It is now a required argument.
         #    We no longer need the 'if/else' block.
         if local_view is None:
@@ -67,7 +69,7 @@ class GlobalElement(Element):
         self._local_view: Element = local_view
 
         # 1. Initialize the super() class with *global* coordinates
-        super().__init__(center, width, interactions)
+        super().__init__(center, width, density, interactions)
 
     @property
     def interactions(self) -> int:

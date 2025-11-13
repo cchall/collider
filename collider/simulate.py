@@ -8,7 +8,8 @@ from typing import List, Tuple
 from itertools import combinations
 
 
-def simulation_step(beams: List[Beam], time_step: float, save_directory: pathlib.Path = None) -> bool:
+def simulation_step(beams: List[Beam], time_step: float,
+                    check_overlap: bool=True, save_directory: pathlib.Path = None) -> bool:
 
     for beam in beams:
         if save_directory is not None:
@@ -16,12 +17,14 @@ def simulation_step(beams: List[Beam], time_step: float, save_directory: pathlib
 
         _ = propagate(beam=beam, time_step=time_step)
 
+
     any_proximal = False
-    for b1, b2 in combinations(beams, 2):
-        proximal = actions.check_beam_proximity(b1, b2)
-        any_proximal = any_proximal or proximal
-        if proximal:
-            actions.update_beam_overlap(b1, b2)
+    if check_overlap:
+        for b1, b2 in combinations(beams, 2):
+            proximal = actions.check_beam_proximity(b1, b2)
+            any_proximal = any_proximal or proximal
+            if proximal:
+                actions.update_beam_overlap(b1, b2)
 
     return any_proximal
 

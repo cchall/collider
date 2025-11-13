@@ -86,7 +86,7 @@ class Beam:
         self.Lx = lx + self.dx / 2.
         self.Ly = ly + self.dy / 2.
 
-        for ii, elem in zip(intensity.ravel(), self._elements):
+        for ii, elem in zip(intensity.T.ravel(), self._elements):
             elem.density = ii
 
 

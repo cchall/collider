@@ -271,17 +271,40 @@ class Beam:
 def plot_beam(beam, figure: List = None, bounds=None,
               filename: str = None, show: bool = True, color_by: str ='interactions'):
     if figure is None:
-        fig, ax = plt.subplots(1, 1)
+        fig, ax = plt.subplots(1, 1, figsize=(16, 11))
     else:
         fig, ax = figure
 
     outline_patch = plt.Rectangle((beam.Cx - beam.Lx / 2., beam.Cy - beam.Ly / 2.), beam.Lx, beam.Ly,
-                                  facecolor='none', edgecolor='black', alpha=0.2,  # 'none' is standard for no fill
+                                  facecolor='none', edgecolor='black', alpha=0.2,
                                   rotation_point='center', angle=beam.angle)
     # ax.add_patch(outline_patch)
 
+    # Helper: draw motion arrow from beam center
+    def _draw_motion_arrow():
+        vx = getattr(beam, 'vx', 0.0)
+        vy = getattr(beam, 'vy', 0.0)
+        vnorm = math.hypot(vx, vy)
+        if vnorm == 0:
+            return  # No direction to draw
+        longest = max(beam.Lx, beam.Ly)
+        target_len = 1.1 * longest  # "a little longer" than the longest side
+        scale = target_len / vnorm
+        x0, y0 = beam.Cx, beam.Cy
+        x1, y1 = x0 + vx * scale, y0 + vy * scale
+        ax.annotate(
+            "",
+            xy=(x1, y1),
+            xytext=(x0, y0),
+            arrowprops=dict(arrowstyle="-|>", lw=2, color="lightgrey",
+                            shrinkA=0, shrinkB=0, mutation_scale=18),
+            zorder=5,
+        )
+
     # 1. Check if there are elements to plot
     if not beam._elements:
+        # Draw arrow even if no elements
+        _draw_motion_arrow()
         # If no elements, just set limits, save, and return
         ax.set_xlim(-beam.Lx * 2, beam.Lx * 2)
         ax.set_ylim(-beam.Lx * 2, beam.Lx * 2)
@@ -294,28 +317,25 @@ def plot_beam(beam, figure: List = None, bounds=None,
     max_val = max(interactions)
 
     # 3. Create a normalizer and a colormap
-    # Use plt.Normalize to map the interaction values to the [0, 1] range
     norm = plt.Normalize(vmin=min_val, vmax=max_val)
-
-    # Choose a colormap (e.g., 'viridis', 'plasma', 'inferno', 'jet', 'coolwarm')
     cmap = plt.cm.get_cmap('viridis')
 
     # 4. Create a ScalarMappable to handle color mapping and for the colorbar
     mappable = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
 
     for ele in beam:
-        # Get the RGBA color for this element's interaction value
         color = mappable.to_rgba(getattr(ele, color_by))
-
         patch = plt.Rectangle((ele.cx - beam.dx / 2., ele.cy - beam.dy / 2.), ele.wx, ele.wy,
                               rotation_point='center', angle=beam.angle,
-                              facecolor=color, edgecolor='black',
-                              alpha=0.42)  # Your original alpha is preserved
+                              facecolor=color, edgecolor=color, alpha=0.42)
         ax.add_patch(patch)
 
+    # 4.5 Add the motion arrow on top of elements
+    _draw_motion_arrow()
+
     # 5. Add the colorbar to the figure
-    cbar = fig.colorbar(mappable, ax=ax, orientation='vertical')
-    cbar.set_label('Interactions')  # Set a label for the colorbar
+    cbar = fig.colorbar(mappable, ax=ax, orientation='vertical', shrink=0.5)
+    cbar.set_label(color_by)
 
     if bounds:
         ax.set_xlim(*bounds[0])
@@ -324,9 +344,10 @@ def plot_beam(beam, figure: List = None, bounds=None,
         ax.set_xlim(-(beam.Cx + beam.Lx) * 2, (beam.Cx + beam.Lx) * 2)
         ax.set_ylim(-(beam.Cy + beam.Ly) * 2, (beam.Cy + beam.Ly) * 2)
     ax.set_aspect('equal')
-
+    plt.tight_layout()
     if filename:
         plt.savefig(filename, dpi=600)
-    if show: plt.show()
+    if show:
+        plt.show()
 
     return fig, ax

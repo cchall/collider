@@ -82,9 +82,10 @@ class Beam:
         intensity, lx, ly = self.profile.sample_intensity(self.Nx, self.Ny, time)
 
         # lx and ly are bounds out to the centers of the outermost elements
-        # so we need to add half an element length to get the full Beam bounds
-        self.Lx = lx + self.dx / 2.
-        self.Ly = ly + self.dy / 2.
+        # so we need to add half an element length on either side to get the full Beam bounds
+        # cell sizes are not updated until the cache is regenerated so do not use self.dx or dy
+        self.Lx = lx + lx / self.Nx
+        self.Ly = ly + ly / self.Ny
 
         for ii, elem in zip(intensity.T.ravel(), self._elements):
             elem.density = ii

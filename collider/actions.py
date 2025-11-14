@@ -30,16 +30,20 @@ def update_beam_overlap(beam1: beam.Beam, beam2: beam.Beam, fuzz: float = 1e-8) 
                 continue
             # Floating point math can give false positives here. So add a small fuzz for cases where the edges overlap.
             if c2c_dist + fuzz < (smallest_edge1 + smallest_edge2):
-                e1.interactions += 1
-                e2.interactions += 1
+                e1.interactions += e1.density * e2.density
+                e2.interactions += e1.density * e2.density
+                e1.flux += e1.density * e2.density
+                e2.flux += e1.density * e2.density
 
                 e1._local_view.interacted_with.add(e2._local_view)
                 e2._local_view.interacted_with.add(e1._local_view)
             else:
                 overlap = overlap_shadows(e1, e2, beam1.angle, beam2.angle, fuzz)
                 if overlap:
-                    e1.interactions += 1
-                    e2.interactions += 1
+                    e1.interactions += e1.density * e2.density
+                    e2.interactions += e1.density * e2.density
+                    e1.flux += e1.density * e2.density
+                    e2.flux += e1.density * e2.density
 
                     e1._local_view.interacted_with.add(e2._local_view)
                     e2._local_view.interacted_with.add(e1._local_view)

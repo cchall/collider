@@ -11,10 +11,10 @@ def update_beam_overlap(beam1: beam.Beam, beam2: beam.Beam, fuzz: float = 1e-8) 
     """
     # TODO: Need to account for rotation here
     # Find extrema of each beam - all elements are the same size so we can check this for only one element
-    largest_edge1 = max(beam1._elements[0].wx, beam1._elements[0].wy) / 2.
-    smallest_edge1 = min(beam1._elements[0].wx, beam1._elements[0].wy) / 2.
-    largest_edge2 = max(beam2._elements[0].wx, beam2._elements[0].wy) / 2.
-    smallest_edge2 = min(beam2._elements[0].wx, beam2._elements[0].wy) / 2.
+    largest_edge1 = max(beam1[0].wx, beam1[0].wy) / 2.
+    smallest_edge1 = min(beam1[0].wx, beam1[0].wy) / 2.
+    largest_edge2 = max(beam2[0].wx, beam2[0].wy) / 2.
+    smallest_edge2 = min(beam2[0].wx, beam2[0].wy) / 2.
 
     # Perform a fast check if element centers are close enough to overlap
     # If they are not then continue
@@ -110,14 +110,16 @@ def overlap_shadows(element1: element.Element, element2: element.Element, angle1
 
     # For each edge we find the unit vector along that edge. This unit vector
     # defines the line that we will project a "shadow" of each rectangle onto
-    projections1 = [  # indexing = [projection][coordinate]
+    projections1 = np.array([  # indexing = [projection][coordinate]
         (edge[1][0] - edge[0][0], edge[1][1] - edge[0][1]) for edge in edges1
-    ]
-    projectsion2 = [  # indexing = [projection][coordinate]
+    ])
+    projections1 = projections1 / np.linalg.norm(projections1, axis=0)
+    projections2 = np.array([  # indexing = [projection][coordinate]
         (edge[1][0] - edge[0][0], edge[1][1] - edge[0][1]) for edge in edges2
-    ]
+    ])
+    projections2 = projections2 / np.linalg.norm(projections2, axis=0)
 
-    for proj in (*projections1, *projectsion2):  # 4 total projections to check
+    for proj in (*projections1, *projections2):  # 4 total projections to check
         ele1_proj = [np.dot(proj, v) for v in vertices1]
         ele2_proj = [np.dot(proj, v) for v in vertices2]
 

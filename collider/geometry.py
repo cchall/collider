@@ -15,10 +15,10 @@ def rotate_element_vertices(element, angle: float, centered: bool = True) -> np.
         vertices = element.vertices.copy()
         vertices[:, 0] -= element.cx
         vertices[:, 1] -= element.cy
-        vertices = np.dot(vertices, rotation_matrix(angle))
+        vertices = vertices @ rotation_matrix(angle).T
         vertices[:, 0] += element.cx
         vertices[:, 1] += element.cy
     else:
-        vertices = np.dot(element.vertices, rotation_matrix(angle))
+        vertices = element.vertices @ rotation_matrix(angle).T
 
     return vertices

@@ -238,6 +238,7 @@ class Beam:
                 width=current_physical_width,
                 density=ele.density,
                 interactions=ele.interactions,
+                flux=ele.flux,
                 local_view=ele
             )
             for gc, ele in zip(global_coords, self._elements)
@@ -270,42 +271,22 @@ class Beam:
 
 
 def plot_beam(beam, figure: List = None, bounds=None,
-              filename: str = None, show: bool = True, color_by: str ='interactions'):
+              filename: str = None, show: bool = True, color_by: str ='interactions', show_cbar=True):
     if figure is None:
         fig, ax = plt.subplots(1, 1, figsize=(16, 11))
     else:
         fig, ax = figure
 
-    outline_patch = plt.Rectangle((beam.Cx - beam.Lx / 2., beam.Cy - beam.Ly / 2.), beam.Lx, beam.Ly,
-                                  facecolor='none', edgecolor='black', alpha=0.2,
-                                  rotation_point='center', angle=beam.angle)
-    # ax.add_patch(outline_patch)
+    # outline_patch = plt.Rectangle((beam.Cx - beam.Lx / 2., beam.Cy - beam.Ly / 2.), beam.Lx, beam.Ly,
+    #                               facecolor='none', edgecolor='black', alpha=0.2,
+    #                               rotation_point='center', angle=beam.angle)
+    # # ax.add_patch(outline_patch)
 
-    # Helper: draw motion arrow from beam center
-    def _draw_motion_arrow():
-        vx = getattr(beam, 'vx', 0.0)
-        vy = getattr(beam, 'vy', 0.0)
-        vnorm = math.hypot(vx, vy)
-        if vnorm == 0:
-            return  # No direction to draw
-        longest = max(beam.Lx, beam.Ly)
-        target_len = 1.1 * longest  # "a little longer" than the longest side
-        scale = target_len / vnorm
-        x0, y0 = beam.Cx, beam.Cy
-        x1, y1 = x0 + vx * scale, y0 + vy * scale
-        ax.annotate(
-            "",
-            xy=(x1, y1),
-            xytext=(x0, y0),
-            arrowprops=dict(arrowstyle="-|>", lw=2, color="lightgrey",
-                            shrinkA=0, shrinkB=0, mutation_scale=18),
-            zorder=5,
-        )
 
     # 1. Check if there are elements to plot
     if not beam._elements:
         # Draw arrow even if no elements
-        _draw_motion_arrow()
+        _draw_motion_arrow(ax, beam)
         # If no elements, just set limits, save, and return
         ax.set_xlim(-beam.Lx * 2, beam.Lx * 2)
         ax.set_ylim(-beam.Lx * 2, beam.Lx * 2)
@@ -328,15 +309,16 @@ def plot_beam(beam, figure: List = None, bounds=None,
         color = mappable.to_rgba(getattr(ele, color_by))
         patch = plt.Rectangle((ele.cx - beam.dx / 2., ele.cy - beam.dy / 2.), ele.wx, ele.wy,
                               rotation_point='center', angle=beam.angle,
-                              facecolor=color, edgecolor=color, alpha=0.42)
+                              facecolor=color, edgecolor=None, alpha=0.42)
         ax.add_patch(patch)
 
     # 4.5 Add the motion arrow on top of elements
-    _draw_motion_arrow()
+    _draw_motion_arrow(ax, beam)
 
     # 5. Add the colorbar to the figure
-    cbar = fig.colorbar(mappable, ax=ax, orientation='vertical', shrink=0.5)
-    cbar.set_label(color_by)
+    if show_cbar:
+        cbar = fig.colorbar(mappable, ax=ax, orientation='vertical', shrink=0.5)
+        cbar.set_label(color_by)
 
     if bounds:
         ax.set_xlim(*bounds[0])
@@ -352,3 +334,29 @@ def plot_beam(beam, figure: List = None, bounds=None,
         plt.show()
 
     return fig, ax
+
+from matplotlib.patches import FancyArrowPatch
+def _draw_motion_arrow(ax, beam):
+    vx = getattr(beam, 'vx', 0.0)
+    vy = getattr(beam, 'vy', 0.0)
+    vnorm = math.hypot(vx, vy)
+    if vnorm == 0:
+        return
+    longest = max(beam.Lx, beam.Ly)
+    target_len = 1.1 * longest / 2.
+    scale = target_len / vnorm
+    x0, y0 = beam.Cx, beam.Cy
+    x1, y1 = x0 + vx * scale, y0 + vy * scale
+
+    arrow = FancyArrowPatch(
+        (x0, y0), (x1, y1),
+        arrowstyle='-|>',
+        lw=2,
+        mutation_scale=18,
+        color='silver',
+        shrinkA=0, shrinkB=0,
+        zorder=10,
+        clip_on=False,          # keep arrow visible even near edges
+        transform=ax.transData  # explicit data coords
+    )
+    ax.add_patch(arrow)

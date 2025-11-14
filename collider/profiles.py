@@ -176,7 +176,10 @@ class LaserPulse(Profile):
         scale = (self.w0 / wx) ** 2
         Iy = np.exp(-2.0 * (np.asarray(y) ** 2) / (wx ** 2))
         It = np.exp(-(((np.asarray(t) - self.t0) - np.asarray(x) / constants.c) ** 2) / (2.0 * self.sigma_t ** 2))
-        return self.I0 * Iy * It * scale
+        I_raw = self.I0 * Iy * It * scale
+        normalization =  np.sum(I_raw)
+
+        return I_raw / normalization
 
     def get_bounds(self, time: float, local: bool = True) -> Tuple[float, float, float, float]:
         """Sampling bounds based on ± n_sigmax σ_t c along x and ± n_sigmay w(x_c) along y.
@@ -226,7 +229,7 @@ class ChargedBeam(Profile):
         t0: float,
         beta_rel: float = 1.0,
         plane: str = 'x',
-        n_sigmax: float = 2.25,
+        n_sigmax: float = 2.0,
         n_sigmay: float = 2.0,
     ) -> None:
         """
@@ -298,7 +301,11 @@ class ChargedBeam(Profile):
         scale = (self.sigma_perp0 / np.where(sig_perp == 0, np.inf, sig_perp))
         Iy = np.exp(-0.5 * (np.asarray(y) / np.where(sig_perp == 0, np.inf, sig_perp)) ** 2)
         It = np.exp(-0.5 * (((np.asarray(t) - self.t0) - np.asarray(x) / self.v) / self.sigma_t) ** 2)
-        return self.I0 * scale * Iy * It
+
+        I_raw = self.I0 * scale * Iy * It
+        normalization = np.sum(I_raw)
+
+        return I_raw / normalization
 
     def get_bounds(self, time: float, local: bool = True) -> Tuple[float, float, float, float]:
         """Sampling bounds based on ± n_sigmax σ_z along x and ± n_sigmay σ⊥(x_c) along y.

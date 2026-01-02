@@ -4,6 +4,8 @@ Compares performance between:
 1. Fast check cases (elements clearly overlapping or clearly not overlapping)
 2. Cases requiring overlap_shadows (ambiguous zone requiring full shadow projection check)
 """
+import sys
+sys.path.append("/Users/chall/research/collider/")
 
 import time
 import math

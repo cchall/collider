@@ -3,7 +3,7 @@ from typing import Set, Tuple
 
 
 class Element:
-    __slots__ = ['center', 'width', 'interactions', '_hwx', '_hwy', 'density', 'interacted_with', 'flux']
+    __slots__ = ['center', 'width', 'interactions', '_hwx', '_hwy', 'density', 'interacted_with', 'flux', '_cx', '_cy']
 
     def __init__(self, center: Tuple[float, float], width: Tuple[float, float],
                  density: float = 0, interactions: int = 0, flux: float = 0.0):
@@ -18,13 +18,16 @@ class Element:
         self._hwx: float = width[0]/2.
         self._hwy: float = width[1]/2.
 
+        self._cx = self.center[0]
+        self._cy = self.center[1]
+
     @property
     def cx(self) -> float:
-        return self.center[0]
+        return self._cx #self.center[0]
 
     @property
     def cy(self) -> float:
-        return self.center[1]
+        return self._cy  #self.center[1]
 
     @property
     def wx(self) -> float:
